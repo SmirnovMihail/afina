@@ -17,11 +17,10 @@ namespace Backend {
  */
 class SimpleLRU : public Afina::Storage {
 public:
-    SimpleLRU(size_t max_size = 1024) : _max_size(max_size) {}
+    SimpleLRU(size_t max_size = 1024) : _max_size(max_size), free_space(_max_size) {}
 
     ~SimpleLRU() {
-        _lru_index.clear();
-        _lru_head.reset(); // TODO: Here is stack overflow
+        _lru_index.clear(); //list cleaning is in the list destructor
     }
 
     // Implements Afina::Storage interface
@@ -41,25 +40,46 @@ public:
 
 private:
     // LRU cache node
-    using lru_node = struct lru_node {
+
+    using lru_node = struct lru_node
+    {
         std::string key;
         std::string value;
-        std::unique_ptr<lru_node> prev;
+        lru_node *prev;
         std::unique_ptr<lru_node> next;
+
+        lru_node(const std :: string &k, const std :: string &v) : key(k), value(v), prev(nullptr), next(nullptr){}
+    };
+
+    class lru_node_list
+    {
+      std::unique_ptr<lru_node> _lru_head;
+      lru_node *_lru_tail;
+
+    public:
+
+      lru_node_list() : _lru_head(nullptr), _lru_tail(nullptr) {}
+      ~lru_node_list();
+
+      const std :: string& get_head_key();
+      size_t delete_lru();
+      size_t delete_element(lru_node& element);
+
+      SimpleLRU :: lru_node* add_in_end(const std :: string &key, const std :: string &value);
     };
 
     // Maximum number of bytes could be stored in this cache.
     // i.e all (keys+values) must be less the _max_size
-    std::size_t _max_size;
+    size_t _max_size;
 
+    size_t free_space;
     // Main storage of lru_nodes, elements in this list ordered descending by "freshness": in the head
     // element that wasn't used for longest time.
     //
     // List owns all nodes
-    std::unique_ptr<lru_node> _lru_head;
-
+    lru_node_list lru_list;
     // Index of nodes from list above, allows fast random access to elements by lru_node#key
-    std::map<std::reference_wrapper<std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> _lru_index;
+    std::map<std::reference_wrapper<const std::string>, std::reference_wrapper<lru_node>, std::less<std::string>> _lru_index;
 };
 
 } // namespace Backend
