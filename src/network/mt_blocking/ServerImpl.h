@@ -3,6 +3,9 @@
 
 #include <atomic>
 #include <thread>
+#include <list>
+#include <mutex>
+#include <condition_variable>
 
 #include <afina/network/Server.h>
 
@@ -37,6 +40,9 @@ protected:
      * Method is running in the connection acceptor thread
      */
     void OnRun();
+    void client_process(int client_socket);
+    std :: list<int> :: const_iterator add_socket(int &client_socket);
+    void remove_client(std :: list<int> :: const_iterator &iter);
 
 private:
     // Logger instance
@@ -47,6 +53,12 @@ private:
     // bounds
     std::atomic<bool> running;
 
+    std :: mutex m, m_for_cv;
+    std :: condition_variable c_variable;
+
+    std :: atomic<size_t> clients_number; //current clients number
+    size_t max_clients_num; //max number of clients on server in the same time
+    std :: list<int> clients_list; // list of client's sockets
     // Server socket to accept connections on
     int _server_socket;
 

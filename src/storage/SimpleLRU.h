@@ -61,11 +61,12 @@ private:
       lru_node_list() : _lru_head(nullptr), _lru_tail(nullptr) {}
       ~lru_node_list();
 
-      const std :: string& get_head_key();
-      size_t delete_lru();
-      size_t delete_element(lru_node& element);
+      const std :: string& get_head_key(); //returns key of head node
+      size_t delete_lru(); //delete node from head
+      size_t delete_node(lru_node& element); //delete node using its link
+      void update_node_usage_status(lru_node& node); //transfers node in the end of list;
 
-      SimpleLRU :: lru_node* add_in_end(const std :: string &key, const std :: string &value);
+      SimpleLRU :: lru_node* add_in_end(const std :: string &key, const std :: string &value); //adds pair in end
     };
 
     // Maximum number of bytes could be stored in this cache.

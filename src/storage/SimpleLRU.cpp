@@ -77,7 +77,7 @@ bool SimpleLRU :: Delete(const std :: string &key)
   {
     lru_node &node = pair -> second;
     _lru_index.erase(std :: reference_wrapper<const std :: string>(key)); //delete from map
-    free_space += lru_list.delete_element(node); //delete from list
+    free_space += lru_list.delete_node(node); //delete from list
 
     return true;
   }
@@ -89,10 +89,15 @@ bool SimpleLRU :: Delete(const std :: string &key)
 // See MapBasedGlobalLockImpl.h
 bool SimpleLRU :: Get(const std :: string &key, std :: string &value)
 {
-  if (_lru_index.count(key))
+  auto pair = _lru_index.find(key);
+
+  if (pair != _lru_index.end())
   {
-    auto pair = _lru_index.find(key);
-    value = pair -> second.get().value;
+    lru_node &node = pair -> second;
+    value = node.value; //recive value
+
+    lru_list.update_node_usage_status(node); //transfer node in the tail of list
+
     return true;
   }
   else
@@ -120,7 +125,7 @@ size_t SimpleLRU :: lru_node_list :: delete_lru()
 }
 
 
-size_t SimpleLRU :: lru_node_list :: delete_element(lru_node &element)
+size_t SimpleLRU :: lru_node_list :: delete_node(lru_node &element)
 {
   size_t size_info = element.key.size() + element.value.size();
 
@@ -138,14 +143,17 @@ size_t SimpleLRU :: lru_node_list :: delete_element(lru_node &element)
     _lru_tail -> next.reset();
   }
   else // other cases
-    element.prev->next = std :: move(element.next);
+  {
+    element.next -> prev = element.prev;
+    element.prev -> next = std :: move(element.next);
+  }
 
   return size_info;
 }
 
 
 SimpleLRU :: lru_node* SimpleLRU :: lru_node_list :: add_in_end(const std :: string &key,
-                                                   const std :: string &value)
+                                                                const std :: string &value)
 {
     std :: unique_ptr<lru_node> new_node_ptr(new lru_node(key, value));
 
@@ -164,6 +172,31 @@ SimpleLRU :: lru_node* SimpleLRU :: lru_node_list :: add_in_end(const std :: str
     return _lru_tail;
 }
 
+
+void SimpleLRU :: lru_node_list :: update_node_usage_status(lru_node& node)
+{
+  if (node.next.get() != nullptr) //node is in place
+  {
+    if (node.prev == nullptr)
+    {
+      _lru_tail -> next = std :: move(_lru_head); //end pointers change
+      _lru_head = std :: move(node.next);
+      _lru_head -> prev = nullptr;
+      node.prev = _lru_tail;
+    }
+    else
+    {
+      lru_node *prev = node.prev;
+
+      _lru_tail -> next = std :: move(prev -> next); //end pointers change
+      node.prev = _lru_tail;
+
+      node.next -> prev = prev; //list gap treatment
+      prev -> next = std :: move(node.next);
+    }
+    _lru_tail = _lru_tail -> next.get(); //suffles tail ptr
+  }
+}
 
 SimpleLRU :: lru_node_list :: ~lru_node_list()
 {

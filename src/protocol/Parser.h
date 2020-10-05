@@ -63,7 +63,6 @@ private:
      * - sg: for GET commands only
      */
     enum State : uint16_t { sCR, sLF, sName, spKey, spFlags, spExprTimeStart, spExprTime, spBytes, sgKey };
-
     // Current parser state
     State state;
 
