@@ -39,8 +39,9 @@ public:
     bool Get(const std::string &key, std::string &value) override;
 
 private:
+    void release_memory(size_t &size);
+    
     // LRU cache node
-
     using lru_node = struct lru_node
     {
         std::string key;
