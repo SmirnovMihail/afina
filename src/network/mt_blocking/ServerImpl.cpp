@@ -34,7 +34,10 @@ ServerImpl::ServerImpl(std::shared_ptr<Afina::Storage> ps, std::shared_ptr<Loggi
 
 
 // See Server.h
-ServerImpl::~ServerImpl() {}
+ServerImpl :: ~ServerImpl()
+{
+    close(_server_socket);
+}
 
 
 // See Server.h
@@ -89,6 +92,7 @@ void ServerImpl::Stop()
     running.store(false);
     shutdown(_server_socket, SHUT_RDWR);
 
+    std :: unique_lock<std :: mutex> ul(m);
     for (auto iter = clients_list.begin(); iter != clients_list.end(); iter++)
     {
         shutdown(*iter, SHUT_RD);
@@ -101,7 +105,6 @@ void ServerImpl::Join()
 {
     assert(_thread.joinable());
     _thread.join();
-    close(_server_socket);
     std :: unique_lock<std :: mutex> ul(m_for_cv);
     while (!clients_list.empty())
     {
@@ -127,7 +130,15 @@ void ServerImpl :: remove_client(std :: list<int> :: const_iterator &iter)
 
 void ServerImpl :: client_process(int client_socket)
 {
-    auto iter = add_socket(client_socket);
+    if (running.load())
+    {
+        auto iter = add_socket(client_socket);
+    }
+    else
+    {
+        close(client_socket);
+        return;
+    }
 
     try
     {
