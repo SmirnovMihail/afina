@@ -128,18 +128,8 @@ void ServerImpl :: remove_client(std :: list<int> :: const_iterator &iter)
 }
 
 
-void ServerImpl :: client_process(int client_socket)
+void ServerImpl :: client_process(int client_socket, std :: list<int> :: const_iterator &iter)
 {
-    if (running.load())
-    {
-        auto iter = add_socket(client_socket);
-    }
-    else
-    {
-        close(client_socket);
-        return;
-    }
-
     try
     {
         int readed_bytes = -1;
@@ -331,7 +321,17 @@ void ServerImpl::OnRun() {
             // if (send(client_socket, msg.data(), msg.size(), 0) <= 0) {
             //     _logger->error("Failed to write response to client: {}", strerror(errno));
             // }
-            std :: thread(&ServerImpl :: client_process, this, client_socket).detach();
+            if (running.load())
+            {
+                auto iter = add_socket(client_socket);
+                std :: thread(&ServerImpl :: client_process, this, client_socket, iter).detach();
+            }
+            else
+            {
+                close(client_socket);
+                return;
+            }
+
             // close(client_socket);
         }
     }

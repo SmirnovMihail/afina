@@ -40,7 +40,7 @@ protected:
      * Method is running in the connection acceptor thread
      */
     void OnRun();
-    void client_process(int client_socket);
+    void client_process(int client_socket, std :: list<int> :: const_iterator &iter);
     std :: list<int> :: const_iterator add_socket(int &client_socket);
     void remove_client(std :: list<int> :: const_iterator &iter);
 
