@@ -128,7 +128,7 @@ void ServerImpl :: remove_client(std :: list<int> :: const_iterator &iter)
 }
 
 
-void ServerImpl :: client_process(int client_socket, std :: list<int> :: const_iterator &iter)
+void ServerImpl :: client_process(int client_socket, std :: list<int> :: const_iterator iter)
 {
     try
     {
@@ -323,7 +323,7 @@ void ServerImpl::OnRun() {
             // }
             if (running.load())
             {
-                auto iter = add_socket(client_socket);
+                std :: list<int> :: const_iterator iter = add_socket(client_socket);
                 std :: thread(&ServerImpl :: client_process, this, client_socket, iter).detach();
             }
             else
