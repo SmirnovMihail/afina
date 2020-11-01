@@ -34,11 +34,11 @@ public:
     bool Get(const std::string &key, std::string &value) override;
 
     ~StripedLockLRU();
-    
+
 private:
 
-    ThreadSafeSimpleLRU* BuildStripedLRU(std::size_t memory_limit, std::size_t stripe_count);
-    ThreadSafeSimpleLRU* shards;
+    std :: unique_ptr<ThreadSafeSimpleLRU[]> BuildStripedLRU(std::size_t memory_limit, std::size_t stripe_count);
+    std :: unique_ptr<ThreadSafeSimpleLRU[]> shards;
 
     size_t stripes_number;
 };

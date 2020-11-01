@@ -5,9 +5,9 @@
 namespace Afina {
 namespace Backend {
 
-ThreadSafeSimpleLRU* StripedLockLRU :: BuildStripedLRU(std::size_t memory_limit, std::size_t stripe_count)
+std :: unique_ptr<ThreadSafeSimpleLRU[]> StripedLockLRU :: BuildStripedLRU(std::size_t memory_limit, std::size_t stripe_count)
 {
-    auto shards = new ThreadSafeSimpleLRU[stripe_count];
+    std :: unique_ptr<ThreadSafeSimpleLRU[]> shards{new ThreadSafeSimpleLRU[stripe_count]};
     if (memory_limit < 1024)
     {
         throw std :: runtime_error("Memory limit is too small");
@@ -69,7 +69,6 @@ bool StripedLockLRU :: Get(const std::string &key, std::string &value)
 
 StripedLockLRU :: ~StripedLockLRU()
 {
-    delete[] shards;
 }
 
 } // namespace Backend
