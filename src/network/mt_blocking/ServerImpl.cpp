@@ -20,6 +20,8 @@
 #include <afina/Storage.h>
 #include <afina/execute/Command.h>
 #include <afina/logging/Service.h>
+#include <afina/concurrency/Executor.h>
+
 
 #include "protocol/Parser.h"
 
@@ -40,7 +42,7 @@ ServerImpl::~ServerImpl() {}
 // See Server.h
 void ServerImpl::Start(uint16_t port, uint32_t n_accept, uint32_t n_workers) {
 
-    max_clients_num = n_workers;
+    //max_clients_num = n_workers;
     _logger = pLogging->select("network");
     _logger->info("Start mt_blocking network service");
 
@@ -272,6 +274,12 @@ void ServerImpl::OnRun() {
     Protocol::Parser parser;
     std::string argument_for_command;
     std::unique_ptr<Execute::Command> command_to_execute;
+    std::function<void(const std::string &)> debug_log = [&, this](const std::string &msg)
+    {
+            return this->_logger->debug(msg);
+    };
+    Afina :: Concurrency :: Executor thread_pool{debug_log};
+
     while (running.load()) {
         _logger->debug("waiting for connection...");
 
@@ -281,12 +289,14 @@ void ServerImpl::OnRun() {
         socklen_t client_addr_len = sizeof(client_addr);
         if ((client_socket = accept(_server_socket, (struct sockaddr *)&client_addr, &client_addr_len)) == -1)
         {
+            _logger->debug("can't accept");
             continue;
         }
         // std::cout<<"clients_num = "<<clients_number.load()<<std::endl;
 
         if (clients_number.load() == max_clients_num)
         {
+            _logger->debug("max_clients_num");
             close(client_socket);
             continue;
         }
@@ -309,7 +319,7 @@ void ServerImpl::OnRun() {
         // Configure read timeout
         {
             struct timeval tv;
-            tv.tv_sec = 5; // TODO: make it configurable
+            tv.tv_sec = 10; // TODO: make it configurable
             tv.tv_usec = 0;
             setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
         }
@@ -320,11 +330,14 @@ void ServerImpl::OnRun() {
             // if (send(client_socket, msg.data(), msg.size(), 0) <= 0) {
             //     _logger->error("Failed to write response to client: {}", strerror(errno));
             // }
-            std :: thread(&ServerImpl :: client_process, this, client_socket).detach();
+            _logger->debug("ok\n");
+            thread_pool.Execute(&ServerImpl :: client_process, this, client_socket);
+            _logger->debug("not ok\n");
+            //std :: thread(&ServerImpl :: client_process, this, client_socket).detach();
             // close(client_socket);
         }
     }
-
+    //thread_pool.Stop();
     // Cleanup on exit...
     _logger->warn("Network stopped");
 }
