@@ -7,6 +7,7 @@
 #include <mutex>
 #include <condition_variable>
 
+#include <afina/concurrency/Executor.h>
 #include <afina/network/Server.h>
 
 namespace spdlog {
