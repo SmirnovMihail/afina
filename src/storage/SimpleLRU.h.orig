@@ -39,6 +39,12 @@ public:
     bool Get(const std::string &key, std::string &value) override;
 
 private:
+<<<<<<< Updated upstream
+    void release_memory(size_t &size);
+    
+=======
+
+>>>>>>> Stashed changes
     // LRU cache node
     using lru_node = struct lru_node
     {
