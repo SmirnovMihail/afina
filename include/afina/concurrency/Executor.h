@@ -150,6 +150,8 @@ private:
             {
                 std :: unique_lock<std :: mutex> lock(executor->mutex);
 
+                auto now = std::chrono::system_clock::now();
+
                 while (empty = executor->tasks.empty())
                 {
 
@@ -164,7 +166,6 @@ private:
                         return;
                     }
 
-                    auto now = std::chrono::system_clock::now();
                     auto wait_time = std::chrono::milliseconds(executor->idle_time);
 
                     auto res = executor->cv_empty.wait_until(lock, now + wait_time);
@@ -185,6 +186,10 @@ private:
                             }
                         }*/
                         executor->existing_workers.fetch_sub(1);
+                        if (executor->existing_workers.load() == 0)
+                        {
+                            executor->State :: kStopped;
+                        }
                         executor->cv_finished.notify_all();
                         return;
                     }
