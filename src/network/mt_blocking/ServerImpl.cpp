@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <spdlog/logger.h>
 
@@ -274,10 +275,16 @@ void ServerImpl::OnRun() {
     Protocol::Parser parser;
     std::string argument_for_command;
     std::unique_ptr<Execute::Command> command_to_execute;
-    std::function<void(const std::string &)> debug_log = [&, this](const std::string &msg)
+    
+    std::function<void(const std::string &, const std::string &)> debug_log =
+                       [&, this](const std::string &msg, const std::string &mode)
     {
+        if (strcmp(mode.c_str(), "warning") == 0)
+            return this->_logger->warn(msg);
+        else if (strcmp(mode.c_str(), "debug") == 0)
             return this->_logger->debug(msg);
     };
+
     Afina :: Concurrency :: Executor thread_pool{debug_log};
 
     while (running.load()) {

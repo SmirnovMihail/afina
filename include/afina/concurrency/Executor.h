@@ -10,6 +10,7 @@
 #include <thread>
 #include <atomic>
 #include <iostream>
+#include <chrono>
 
 //#include "src/concurrency/CMakeFiles/Executor.cpp"
 
@@ -36,7 +37,8 @@ public:
         kStopped
     };
 
-    Executor(std::function<void(const std::string &msg)> &log_err_, size_t min = 4, size_t max = 16, size_t queue_max = 1000, size_t time_ms = 10000)
+    Executor(std::function<void(const std::string &msg, const std::string &mode)> &log_err_,
+             size_t min = 4, size_t max = 16, size_t queue_max = 1000, size_t time_ms = 10000)
     {
         min_workers = min;
         max_workers = max;
@@ -53,11 +55,9 @@ public:
         for (auto i=0; i < min; i++)
         {
             //auto thread = std :: thread(perform, this);
-        log_err("*2.5\n");
             //threads.emplace_back(std :: thread([this] { return perform(this); }));
             std :: thread th([this] { return perform(this); });
             th.detach();
-        log_err("*2.6\n");
         }
     }
     ~Executor()
@@ -103,13 +103,11 @@ public:
         {
             return false;
         }
-        log_err("*3\n");
 
         while (queue_size > max_queue_size)
         {
-            cv_full.wait(lock);
+            return false;
         }
-        log_err("*4\n");
 
         // Enqueue new task
         tasks.push_back(exec);
@@ -120,14 +118,14 @@ public:
 
         if (workers == existing && existing < max_workers)
         {
-            log_err("______________________________________________________\n");
-            //auto thread = std :: thread(perform, this);
-            //threads.emplace_back(std :: thread(perform, this));
             std :: thread th([this] { return perform(this); });
             th.detach();
             existing_workers.fetch_add(1);
         }
-        cv_empty.notify_all();
+        else
+        {
+            cv_empty.notify_all();
+        }
 
         return true;
     }
@@ -154,10 +152,25 @@ private:
 
                 while (empty = executor->tasks.empty())
                 {
-                    auto res = executor->cv_empty.wait_for(lock,
-                                                           std::chrono::milliseconds(executor->idle_time));
-                    if (res == std::cv_status::timeout ||
-                        executor->existing_workers.load() > executor->max_workers)
+
+                    if (empty && executor -> state == executor->State :: kStopping)
+                    {
+                        executor->existing_workers.fetch_sub(1);
+                        if (executor->existing_workers.load() == 0)
+                        {
+                            executor->State :: kStopped;
+                        }
+                        executor->cv_finished.notify_all();
+                        return;
+                    }
+
+                    auto now = std::chrono::system_clock::now();
+                    auto wait_time = std::chrono::milliseconds(executor->idle_time);
+
+                    auto res = executor->cv_empty.wait_until(lock, now + wait_time);
+
+                    if (res == std::cv_status::timeout &&
+                        executor->existing_workers.load() > executor->min_workers)
                     {
                         /*auto this_thread_id = std::this_thread::get_id();
                         for (std :: vector<std :: thread> :: iterator it = executor->threads.begin(); it != executor->threads.end(); it++)
@@ -172,36 +185,25 @@ private:
                             }
                         }*/
                         executor->existing_workers.fetch_sub(1);
-                        executor->cv_finished.notify_one();
-                        return;
-                    }
-
-                    if (empty && executor -> state == executor->State :: kStopping)
-                    {
-                        executor->existing_workers.fetch_sub(1);
-                        executor->cv_finished.notify_one();
+                        executor->cv_finished.notify_all();
                         return;
                     }
                 }
 
-                //if (empty && )
-                //    return;
-
                 task = std::move(executor->tasks.front());
                 executor->tasks.pop_front();
-
-                if (executor->state == executor->State :: kStopping && executor->busy_workers == 0)
-                    executor->cv_finished.notify_one();
-
-                if (executor->queue_size == executor->max_queue_size)
-                    executor->cv_full.notify_one();
 
                 executor->queue_size--;
             }
             executor->busy_workers.fetch_add(1);
-            auto this_thread_id = std::this_thread::get_id();
-            std :: cout << this_thread_id << "\n";
-            task();
+            try
+            {
+                task();
+            }
+            catch (...)
+            {
+                executor->log_err("Task exception happened\n", "warning");
+            }
             executor->busy_workers.fetch_sub(1);
                 //if (executor -> state != kStopping)
         }
@@ -216,7 +218,6 @@ private:
      * Conditional variable to await new data in case of empty queue
      */
     std :: condition_variable cv_empty;
-    std :: condition_variable cv_full;
     std :: condition_variable cv_finished;
 
     /**
@@ -243,7 +244,7 @@ private:
     std :: atomic<size_t> existing_workers;
     std :: atomic<size_t> busy_workers;
 
-    std::function<void(const std::string &msg)> log_err;
+    std::function<void(const std::string &msg, const std::string &mode)> log_err;
 };
 
 } // namespace Concurrency
