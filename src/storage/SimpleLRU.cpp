@@ -27,20 +27,49 @@ bool SimpleLRU :: Put(const std :: string &key, const std :: string &value)
     return false;
   }
 
-  if (!_lru_index.count(key)) //insert or set value
-  {
-    release_memory(size);
-    free_space -= size;
+  auto pair = _lru_index.find(key);
 
-    lru_node *new_elem = lru_list.add_in_end(key, value);
-    _lru_index.insert(std :: make_pair(std :: reference_wrapper<std :: string>(new_elem->key),
-                                       std :: reference_wrapper<lru_node>(*new_elem)));
-    return true;
+  if (pair == _lru_index.end()) //insert or set value
+  {
+    put_process(key, value);
   }
   else
   {
-    return Set(key, value);
+    set_process(pair, value);
   }
+
+  return true;
+}
+
+
+void SimpleLRU :: put_process(const std :: string &key, const std :: string &value)
+{
+  size_t size = key.size() + value.size();
+
+  release_memory(size);
+  free_space -= size;
+
+  lru_node *new_elem = lru_list.add_in_end(key, value);
+  _lru_index.insert(std :: make_pair(std :: reference_wrapper<std :: string>(new_elem->key),
+                                     std :: reference_wrapper<lru_node>(*new_elem)));
+}
+
+
+void SimpleLRU :: set_process(const map_type :: iterator &pair,
+                              const std :: string &value)
+{
+  size_t value_size = value.size();
+
+  std :: string &value_ref = pair -> second.get().value; // get refernce to changing value
+  free_space += value_ref.size();
+
+  lru_node &node = pair -> second;
+  lru_list.update_node_usage_status(node); //transfer node in the tail of list
+
+  release_memory(value_size);
+  free_space -= value_size;
+
+  value_ref = value;
 }
 
 
@@ -84,10 +113,14 @@ bool SimpleLRU::PutIfAbsent(const std :: string &key, const std :: string &value
 {
   if (!_lru_index.count(key))
   {
-    return Put(key, value);
+    put_process(key, value);
+
+    return true;
   }
   else
+  {
     return false;
+  }
 }
 
 
@@ -112,18 +145,10 @@ bool SimpleLRU::PutIfAbsent(const std :: string &key, const std :: string &value
 bool SimpleLRU :: Set(const std :: string &key, const std :: string &value)
 {
   auto pair = _lru_index.find(key);
-  size_t value_size = value.size();
 
   if (pair != _lru_index.end())
   {
-    std :: string &value_ref = pair -> second.get().value; // get refernce to changing value
-    free_space += value_ref.size();
-
-    release_memory(value_size);
-    free_space -= value_size;
-
-    value_ref = value;
-
+    set_process(pair, value);
     return true;
   }
   else
