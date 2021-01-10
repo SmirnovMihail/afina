@@ -23,7 +23,7 @@ namespace MTnonblock {
     public:
 
         Connection(int s, std :: shared_ptr<spdlog :: logger> &_log, std::shared_ptr<Afina :: Storage> &ps)
-                   : _socket(s), _logger(_log), pStorage(ps), max_q_size(100), offset(0)
+                   :_socket(s), _logger(_log), pStorage(ps), max_q_size(100), write_offset(0), read_offset(0)
         {
             std :: memset(&_event, 0, sizeof(struct epoll_event));
             _event.data.ptr = this;
@@ -61,7 +61,8 @@ namespace MTnonblock {
         char client_buffer[4096];
 
         size_t max_q_size;
-        size_t offset;
+        size_t read_offset;
+        size_t write_offset;
 
         std :: mutex _mutex;
     };

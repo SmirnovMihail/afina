@@ -36,14 +36,14 @@ void Connection::OnClose()
 // See Connection.h
 void Connection::DoRead()
 {
-    std::unique_lock<std::mutex> lock(_mutex);
+    //std::unique_lock<std::mutex> lock(_mutex);
 
     std::cout << "DoRead" << std::endl;
     uint32_t new_event = 0;
     int readed_bytes = -1;
     try
     {
-        while ((readed_bytes = read(_socket, client_buffer, sizeof(client_buffer))) > 0)
+        while ((readed_bytes = read(_socket, client_buffer + read_offset, sizeof(client_buffer) - read_offset)) > 0)
         {
             _logger->debug("Got {} bytes from socket", readed_bytes);
             // Single block of data readed from the socket could trigger inside actions a multiple times,
@@ -61,7 +61,6 @@ void Connection::DoRead()
                     {
                         // There is no command to be launched, continue to parse input stream
                         // Here we are, current chunk finished some command, process it
-                        //_logger->debug("Found new command:({})", client_buffer);
                         _logger->debug("Found new command: {} in {} bytes", parser.Name(), parsed);
                         command_to_execute = parser.Build(arg_remains);
                         if (arg_remains > 0)
@@ -78,7 +77,8 @@ void Connection::DoRead()
                     }
                     else
                     {
-                        std::memmove(client_buffer, client_buffer + parsed, readed_bytes - parsed);
+                        read_offset = readed_bytes - parsed;
+                        std::memmove(client_buffer, client_buffer + parsed, read_offset);
                         readed_bytes -= parsed;
                     }
                 }
@@ -91,7 +91,8 @@ void Connection::DoRead()
                     std::size_t to_read = std::min(arg_remains, std::size_t(readed_bytes));
                     argument_for_command.append(client_buffer, to_read);
 
-                    std::memmove(client_buffer, client_buffer + to_read, readed_bytes - to_read);
+                    read_offset = readed_bytes - to_read;
+                    std::memmove(client_buffer, client_buffer + to_read, read_offset);
                     arg_remains -= to_read;
                     readed_bytes -= to_read;
                 }
@@ -112,20 +113,25 @@ void Connection::DoRead()
                     // Send response
                     result += "\r\n";
                     _logger->debug("Result ({})", result);
-                    size_t current_size = output.size();
 
-                    _logger->debug("Curr size = {}", current_size);
-                    output.push_back(result);
+                    std::unique_lock<std::mutex> lock(_mutex);
+                    {
+                        size_t current_size = output.size();
 
-                    if (current_size == 0) //queue was empty
-                    {
-                        _event.events |= EPOLLOUT;
-                    }
-                    if (current_size >= max_q_size)
-                    {
-                        //new_event |= EPOLLIN;
-                        _event.events &= ~EPOLLIN;
-                        break;
+                        _logger->debug("Curr size = {}", current_size);
+
+                        output.push_back(result);
+
+                        if (current_size == 0) //queue was empty
+                        {
+                            _event.events |= EPOLLOUT;
+                        }
+                        if (current_size >= max_q_size)
+                        {
+                            //new_event |= EPOLLIN;
+                            _event.events &= ~EPOLLIN;
+                            break;
+                        }
                     }
                     // if (new_event != _event.events)
                     // {
@@ -176,16 +182,16 @@ void Connection::DoWrite()
     {
         auto msg = output.front();
         size_t size = msg.size();
-        int len = send(_socket, msg.data() + offset, size - offset, 0);
-        _logger->debug("msg = {} ||| {}", msg.data(), msg.data() + offset);
+        int len = send(_socket, msg.data() + write_offset, size - write_offset, 0);
+        _logger->debug("msg = {} ||| {}", msg.data(), msg.data() + write_offset);
         if (len > 0)
         {
-            offset += len;
-            if (offset == size)
+            write_offset += len;
+            if (write_offset == size)
             {
                 output.pop_front();
                 current_size--;
-                offset = 0;
+                write_offset = 0;
             }
         }
         else if ((len == -1) && (errno != EAGAIN))
