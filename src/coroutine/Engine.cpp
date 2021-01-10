@@ -27,7 +27,11 @@ void Engine :: Store(context &ctx)
         std :: get<0>(ctx.Stack) = new char[stackSize];
         std :: get<1>(ctx.Stack) = stackSize;
     }
-
+    // for (size_t i = 0; i < stackSize; i ++)
+    // {
+    //     std :: get<0>(ctx.Stack)[i] = *(ctx.Low + i);
+    //     printf("ok\n");
+    // }
     std :: memcpy(std :: get<0>(ctx.Stack), ctx.Low, stackSize);
 }
 
@@ -57,19 +61,30 @@ void Engine :: sched(void *routine_)
     {
         if (alive != nullptr)
         {
-            sched(alive);
+            if (alive != cur_routine)
+            {
+                sched(alive);
+            }
+            else if (alive->next != nullptr)
+            {
+                sched(alive->next);
+            }
+            else
+                //std :: longjmp(idle_ctx->Environment, 1);
+                Restore(*idle_ctx);
         }
         else
-            return;
+            Restore(*idle_ctx);
+            //std :: longjmp(idle_ctx->Environment, 1);
     }
-    else
+    else if (routine_ != cur_routine)
     {
         Store(*cur_routine);
         if (setjmp(cur_routine->Environment) == 0)
         {
             cur_routine = (context*)routine_;
             Restore(*cur_routine);
-            std :: longjmp(cur_routine->Environment, 1);
+            //std :: longjmp(cur_routine->Environment, 1);
         }
         else
             return;

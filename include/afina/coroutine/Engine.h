@@ -148,7 +148,7 @@ public:
         void *pc = run(main, std::forward<Ta>(args)...);
 
         idle_ctx = new context();
-        idle_ctx->Low = StackBottom;
+        idle_ctx->Low = idle_ctx->Hight = StackBottom;
         if (setjmp(idle_ctx->Environment) > 0) {
             if (alive == nullptr) {
                 _unblocker(*this);
