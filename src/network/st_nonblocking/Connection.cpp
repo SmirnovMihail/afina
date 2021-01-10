@@ -40,8 +40,7 @@ void Connection::DoRead()
     int readed_bytes = -1;
     try
     {
-        _logger->debug("shit, size = {}", output.size());
-        while ((readed_bytes = read(_socket, client_buffer, sizeof(client_buffer))) > 0)
+        while ((readed_bytes = read(_socket, client_buffer + read_offset, sizeof(client_buffer) - read_offset)) > 0)
         {
             _logger->debug("Got {} bytes from socket", readed_bytes);
             // Single block of data readed from the socket could trigger inside actions a multiple times,
@@ -75,7 +74,8 @@ void Connection::DoRead()
                     }
                     else
                     {
-                        std::memmove(client_buffer, client_buffer + parsed, readed_bytes - parsed);
+                        read_offset = readed_bytes - parsed;
+                        std::memmove(client_buffer, client_buffer + parsed, read_offset);
                         readed_bytes -= parsed;
                     }
                 }
@@ -88,7 +88,8 @@ void Connection::DoRead()
                     std::size_t to_read = std::min(arg_remains, std::size_t(readed_bytes));
                     argument_for_command.append(client_buffer, to_read);
 
-                    std::memmove(client_buffer, client_buffer + to_read, readed_bytes - to_read);
+                    read_offset = readed_bytes - to_read;
+                    std::memmove(client_buffer, client_buffer + to_read, read_offset);
                     arg_remains -= to_read;
                     readed_bytes -= to_read;
                 }
@@ -168,16 +169,16 @@ void Connection::DoWrite()
     {
         auto msg = output.front();
         size_t size = msg.size();
-        int len = send(_socket, msg.data() + offset, size - offset, 0);
-        _logger->debug("msg = {} ||| {}", msg.data(), msg.data() + offset);
+        int len = send(_socket, msg.data() + write_offset, size - write_offset, 0);
+        _logger->debug("msg = {} ||| {}", msg.data(), msg.data() + write_offset);
         if (len > 0)
         {
-            offset += len;
-            if (offset == size)
+            write_offset += len;
+            if (write_offset == size)
             {
                 output.pop_front();
                 current_size--;
-                offset = 0;
+                write_offset = 0;
             }
         }
         else if ((len == -1) && (errno != EAGAIN))
