@@ -74,6 +74,9 @@ private:
      */
     unblocker_func _unblocker;
 
+    context* push_front_in_list(context *list_begin, context *ptr);
+    void delete_from_list(context *ptr);
+
 protected:
     /**
      * Save stack of the current coroutine in the given context
@@ -92,6 +95,7 @@ public:
         : StackBottom(0), cur_routine(nullptr), alive(nullptr), _unblocker(unblocker) {}
     Engine(Engine &&) = delete;
     Engine(const Engine &) = delete;
+    ~Engine();
 
     /**
      * Gives up current routine execution and let engine to schedule other one. It is not defined when
@@ -110,7 +114,7 @@ public:
      * If routine to pass execution to is not specified (nullptr) then method should behaves like yield. In case
      * if passed routine is the current one method does nothing
      */
-    void sched(void *routine);
+    void sched(void *routine = nullptr);
 
     /**
      * Blocks current routine so that is can't be scheduled anymore
@@ -118,12 +122,12 @@ public:
      *
      * If argument is nullptr then block current coroutine
      */
-    void block(void *coro = nullptr);
+    void block(void *routine_ = nullptr);
 
     /**
      * Put coroutine back to list of alive, so that it could be scheduled later
      */
-    void unblock(void *coro);
+    void unblock(void *routine_);
 
     /**
      * Entry point into the engine. Prepare all internal mechanics and starts given function which is
@@ -144,6 +148,7 @@ public:
         void *pc = run(main, std::forward<Ta>(args)...);
 
         idle_ctx = new context();
+        idle_ctx->Low = idle_ctx->Hight = StackBottom;
         if (setjmp(idle_ctx->Environment) > 0) {
             if (alive == nullptr) {
                 _unblocker(*this);
@@ -161,11 +166,15 @@ public:
         this->StackBottom = 0;
     }
 
+    template <typename... Ta> void *run(void (*func)(Ta...), Ta &&... args) {
+        char sp;
+        return run_impl(&sp, func, std::forward<Ta>(args)...);
+    }
     /**
      * Register new coroutine. It won't receive control until scheduled explicitely or implicitly. In case of some
      * errors function returns -1
      */
-    template <typename... Ta> void *run(void (*func)(Ta...), Ta &&... args) {
+    template <typename... Ta> void *run_impl(char *addr, void (*func)(Ta...), Ta &&... args) {
         if (this->StackBottom == 0) {
             // Engine wasn't initialized yet
             return nullptr;
@@ -173,7 +182,7 @@ public:
 
         // New coroutine context that carries around all information enough to call function
         context *pc = new context();
-
+        pc->Low = addr;
         // Store current state right here, i.e just before enter new coroutine, later, once it gets scheduled
         // execution starts here. Note that we have to acquire stack of the current function call to ensure
         // that function parameters will be passed along
