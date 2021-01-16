@@ -3,6 +3,7 @@
 
 #include <thread>
 #include <vector>
+#include <mutex>
 
 #include <afina/network/Server.h>
 
@@ -63,6 +64,8 @@ private:
 
     // threads serving read/write requests
     std::vector<Worker> _workers;
+
+    std :: mutex _mutex;
 };
 
 } // namespace MTnonblock

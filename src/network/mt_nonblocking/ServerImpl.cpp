@@ -157,6 +157,7 @@ void ServerImpl::OnRun() {
     bool run = true;
     std::array<struct epoll_event, 64> mod_list;
     while (run) {
+_logger->debug("acceptor wait");
         int nmod = epoll_wait(acceptor_epoll, &mod_list[0], mod_list.size(), -1);
         _logger->debug("Acceptor wokeup: {} events", nmod);
 
@@ -193,7 +194,7 @@ void ServerImpl::OnRun() {
                 }
 
                 // Register the new FD to be monitored by epoll.
-                Connection *pc = new Connection(infd);
+                Connection *pc = new(std::nothrow) Connection(infd, _logger, pStorage);
                 if (pc == nullptr) {
                     throw std::runtime_error("Failed to allocate connection");
                 }
@@ -203,10 +204,14 @@ void ServerImpl::OnRun() {
                 if (pc->isAlive()) {
                     pc->_event.events |= EPOLLONESHOT;
                     int epoll_ctl_retval;
-                    if ((epoll_ctl_retval = epoll_ctl(_data_epoll_fd, EPOLL_CTL_ADD, pc->_socket, &pc->_event))) {
-                        _logger->debug("epoll_ctl failed during connection register in workers'epoll: error {}", epoll_ctl_retval);
-                        pc->OnError();
-                        delete pc;
+                    {
+                        std::unique_lock<std::mutex> lock(_mutex);
+
+                        if ((epoll_ctl_retval = epoll_ctl(_data_epoll_fd, EPOLL_CTL_ADD, pc->_socket, &pc->_event))) {
+                            _logger->debug("epoll_ctl failed during connection register in workers'epoll: error {}", epoll_ctl_retval);
+                            pc->OnError();
+                            delete pc;
+                        }
                     }
                 }
             }
